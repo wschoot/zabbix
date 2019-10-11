@@ -14,7 +14,13 @@
         state: latest
         update_cache: yes
 
----
+    - name: Install zabbix packages
+      package:
+        state: installed
+        name:
+          - vim
+          - ansible
+
 - hosts: zabbix
   become: true
   tasks:
@@ -29,8 +35,11 @@
           - mariadb
           - mariadb-server
           - MySQL-python
-          - vim
-          - ansible
+          - python-pip
+
+    - name: install zabbix api
+      pip:
+        name: zabbix-api
 
     - name: Edit nginx configuration (hostname and listen)
       blockinfile:
@@ -57,10 +66,30 @@
         - zabbix-server
         - php-fpm
 
-    #- name: gunzip file
-    #  command: gunzip /usr/share/doc/zabbix-server-mysql-4.4.0/create.sql.gz
-    #  args:
-    #    creates: /usr/share/doc/zabbix-server-mysql-4.4.0/create.sql
+    - name: Prepopulate zabbix.conf.php
+      copy:
+        dest: /etc/zabbix/web/zabbix.conf.php
+        content: |
+          <?php
+          // Zabbix GUI configuration file.
+          global $DB;
+
+          $DB['TYPE']     = 'MYSQL';
+          $DB['SERVER']   = 'localhost';
+          $DB['PORT']     = '0';
+          $DB['DATABASE'] = 'zabbix';
+          $DB['USER']     = 'zabbix';
+          $DB['PASSWORD'] = '';
+
+          // Schema name. Used for IBM DB2 and PostgreSQL.
+          $DB['SCHEMA'] = '';
+
+          $ZBX_SERVER      = 'localhost';
+          $ZBX_SERVER_PORT = '10051';
+          $ZBX_SERVER_NAME = '';
+
+          $IMAGE_FORMAT_DEFAULT = IMAGE_FORMAT_PNG;
+
 
     - name: Make DB
       mysql_db:
@@ -84,6 +113,112 @@
         name: zabbix
         priv: "zabbix.*:ALL"
         state: present
+
+    - name: Add proxy to zabbix master
+      zabbix_proxy:
+        server_url: http://zabbix.local
+        login_user: Admin
+        login_password: zabbix
+        proxy_name: "Zabbix proxy"
+        description: "Zabbix proxy"
+        status: active
+        state: present
+        interface:
+          type: 0
+          main: 1
+          useip: 1
+          ip: 10.0.15.31
+          dns: ""
+          port: 10050
+
+    - name: Add host to zabbix master
+      zabbix_host:
+        server_url: http://zabbix.local
+        login_user: Admin
+        login_password: zabbix
+        description: "Zabbix client"
+        host_name: "client.local"
+        visible_name: "Zabbix client"
+        status: enabled
+        host_groups:
+          - Linux servers
+        link_templates:
+          - Template OS Linux by Zabbix agent active
+        state: present
+        interfaces:
+          - type: 1
+            main: 1
+            useip: 0
+            ip: 10.0.15.32
+            dns: "client.local"
+            port: 10050
+        proxy: "Zabbix proxy"
+
+- hosts: proxy
+  become: true
+  tasks:
+    - name: Install zabbix packages
+      package:
+        state: installed
+        name:
+          - zabbix-proxy-sqlite3
+
+    - name: Make sure dir exists
+      file:
+        state: directory
+        path: /var/lib/zabbix
+        owner: zabbix
+
+    - name: Fix config (db)
+      lineinfile:
+        dest: /etc/zabbix/zabbix_proxy.conf
+        regexp: "^DBName="
+        line: "DBName=/var/lib/zabbix/zabbix_proxy"
+
+    - name: Fix config (server)
+      lineinfile:
+        dest: /etc/zabbix/zabbix_proxy.conf
+        regexp: "^Server="
+        line: "Server=zabbix.local"
+
+    - name: Start services
+      service:
+        name: zabbix-proxy
+        state: started
+        enabled: yes
+
+- hosts: client
+  become: true
+  tasks:
+    - name: Install zabbix packages
+      package:
+        state: installed
+        name:
+          - zabbix-agent
+
+    - name: Fix config (server)
+      lineinfile:
+        dest: /etc/zabbix/zabbix_agentd.conf
+        regexp: "^Server="
+        line: "Server=proxy.local"
+
+    - name: Fix config (serveractive)
+      lineinfile:
+        dest: /etc/zabbix/zabbix_agentd.conf
+        regexp: "^ServerActive="
+        line: "ServerActive=proxy.local"
+
+    - name: Fix config (hostname)
+      lineinfile:
+        dest: /etc/zabbix/zabbix_agentd.conf
+        regexp: "^Hostname="
+        line: "Hostname=client.local"
+
+    - name: Start services
+      service:
+        name: zabbix-agent
+        state: started
+        enabled: yes
 
     - name: Login
       debug:

@@ -26,11 +26,13 @@ Vagrant.configure("2") do |config|
 		node.vm.hostname = "proxy.local"
 		node.vm.network :private_network, ip: "10.0.15.31"
 		node.vm.provision :hostmanager
-		node.vm.provision :ansible do |ansible|
-			ansible.playbook = "playbook.yml"
-			ansible.compatibility_mode = "2.0"
-			ansible.limit = "all"
-		end
+	end
+
+	config.vm.define "client" do |node|
+		node.vm.synced_folder ".", "/vagrant", type: "sshfs"
+		node.vm.hostname = "client.local"
+		node.vm.network :private_network, ip: "10.0.15.32"
+		node.vm.provision :hostmanager
 	end
 
 	if Vagrant.has_plugin?("vagrant-hostmanager")
