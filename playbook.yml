@@ -47,7 +47,7 @@
         insertafter: "^server {"
         block: |
           listen          80;
-          server_name     zabbix.local;
+          server_name     zabbix.local localhost default;
 
     - name: Edit php-fpm configuration (timezone)
       lineinfile:
@@ -86,7 +86,7 @@
 
           $ZBX_SERVER      = 'localhost';
           $ZBX_SERVER_PORT = '10051';
-          $ZBX_SERVER_NAME = '';
+          $ZBX_SERVER_NAME = '{{ inventory_hostname }}';
 
           $IMAGE_FORMAT_DEFAULT = IMAGE_FORMAT_PNG;
 
@@ -195,6 +195,7 @@
         state: installed
         name:
           - zabbix-agent
+          - zabbix-sender
 
     - name: Fix config (server)
       lineinfile:
