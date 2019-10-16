@@ -5,8 +5,8 @@ Vagrant.configure("2") do |config|
 
   config.vm.box = "centos/7"
   config.vm.provider :libvirt do |vb|
-    vb.memory = 4096
-    vb.cpus = "2"
+    vb.memory = 2048
+    vb.cpus = "1"
   end
 
 	config.vm.define "zabbix" do |node|
@@ -28,10 +28,17 @@ Vagrant.configure("2") do |config|
 		node.vm.provision :hostmanager
 	end
 
-	config.vm.define "client" do |node|
+	config.vm.define "client1" do |node|
 		node.vm.synced_folder ".", "/vagrant", type: "sshfs"
-		node.vm.hostname = "client.local"
+		node.vm.hostname = "client1.local"
 		node.vm.network :private_network, ip: "10.0.15.32"
+		node.vm.provision :hostmanager
+	end
+
+	config.vm.define "client2" do |node|
+		node.vm.synced_folder ".", "/vagrant", type: "sshfs"
+		node.vm.hostname = "client2.local"
+		node.vm.network :private_network, ip: "10.0.15.33"
 		node.vm.provision :hostmanager
 	end
 
